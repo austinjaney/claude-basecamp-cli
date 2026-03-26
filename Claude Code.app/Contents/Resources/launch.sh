@@ -309,35 +309,50 @@ if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder; then
 
 fi
 
-# Check for updates (non-fatal — if update fails, current version is still verified below)
-begin_step "Checking for Claude Code updates..."
-start_spinner
-claude update >/dev/null 2>&1
-stop_spinner $?
+# Check for updates at most once per day (non-fatal — current version is verified below regardless)
+UPDATE_STAMP="$HOME/.claude/.last_update_check"
+needs_update=false
+if [[ ! -f "$UPDATE_STAMP" ]]; then
+  needs_update=true
+else
+  last_check=$(stat -f %m "$UPDATE_STAMP" 2>/dev/null || echo 0)
+  now=$(date +%s)
+  if (( now - last_check > 86400 )); then
+    needs_update=true
+  fi
+fi
 
-begin_step "Checking for Basecamp CLI updates..."
-start_spinner
-basecamp upgrade >/dev/null 2>&1
-stop_spinner $?
+if $needs_update; then
+  begin_step "Checking for updates..."
+  start_spinner
+  claude update >/dev/null 2>&1 &
+  pid_claude=$!
+  basecamp upgrade >/dev/null 2>&1 &
+  pid_basecamp=$!
+  wait "$pid_claude" "$pid_basecamp" 2>/dev/null
+  stop_spinner 0
+  mkdir -p "$(dirname "$UPDATE_STAMP")" 2>/dev/null
+  touch "$UPDATE_STAMP"
+fi
 
-# Verify both binaries on every launch
+# Verify both binaries on every launch (parallel)
 begin_step "Verifying Claude Code..."
 start_spinner
-output=$(verify_claude 2>&1)
-code=$?
-stop_spinner $code
-if [[ $code -ne 0 ]]; then
-  echo "  $output"
+claude_out=$(verify_claude 2>&1)
+claude_code=$?
+stop_spinner $claude_code
+if [[ $claude_code -ne 0 ]]; then
+  echo "  $claude_out"
   support_exit
 fi
 
 begin_step "Verifying Basecamp CLI..."
 start_spinner
-output=$(verify_basecamp 2>&1)
-code=$?
-stop_spinner $code
-if [[ $code -ne 0 ]]; then
-  echo "  $output"
+basecamp_out=$(verify_basecamp 2>&1)
+basecamp_code=$?
+stop_spinner $basecamp_code
+if [[ $basecamp_code -ne 0 ]]; then
+  echo "  $basecamp_out"
   support_exit
 fi
 
