@@ -8,12 +8,19 @@ A macOS launcher app and workspace for managing Basecamp using [Claude Code](htt
 
 The `~/Claude` directory is a Claude Code workspace pre-configured with a default Basecamp account and project, so commands go to the right place without any extra flags.
 
-## Requirements
+## Prerequisites
 
-- macOS (arm64 or x86_64)
-- Microsoft Defender for Endpoint (`mdatp`) — required; installation will not proceed without it
-- Internet access on first launch
-- A Basecamp account
+Before distributing this app, ensure the following are in place on target machines:
+
+| Requirement | Why | How to verify |
+|---|---|---|
+| **macOS** (arm64 or x86_64) | Only platform supported | `uname -ms` → `Darwin arm64` or `Darwin x86_64` |
+| **Microsoft Defender for Endpoint** | Every downloaded installer is scanned before execution. The launcher will not proceed without it. | `mdatp version` returns a version number |
+| **Internet access** | Required on first launch to download Claude Code and Basecamp CLI, and for Basecamp OAuth. Subsequent launches need internet only for daily update checks and manifest verification. | `curl -sI https://claude.ai` returns `200` |
+| **A Basecamp account** | Users authenticate via OAuth during first-time setup. | User can sign in at [launchpad.37signals.com](https://launchpad.37signals.com) |
+| **Terminal.app** | The launcher opens Terminal to run its setup script. Included with macOS by default. | `/Applications/Utilities/Terminal.app` exists |
+
+No other dependencies are needed — Claude Code and the Basecamp CLI are installed automatically on first launch.
 
 ## The experience
 
@@ -29,6 +36,7 @@ The app detects what's missing and presents a single setup screen before doing a
   This app uses Claude Code and the Basecamp CLI to let you
   manage Basecamp in plain language. The following will be set up:
 
+    • Configure IT support contact
     • Install Claude Code
     • Install Basecamp CLI
     • Connect your Basecamp account
@@ -37,7 +45,19 @@ The app detects what's missing and presents a single setup screen before doing a
   Ready to continue? [y/n]:
 ```
 
-One confirmation, then the setup runs:
+One confirmation, then setup begins. The first step prompts for an IT support email address — this is saved locally and shown to the user if anything goes wrong in the future:
+
+```
+  IT support contact
+  If something goes wrong, this email will be shown so you
+  know who to contact for help.
+
+  IT support email address: helpdesk@example.com
+
+  ✓ Support contact saved.
+```
+
+Then the rest of the setup runs:
 
 ```
   Downloading Claude Code...           ✓
@@ -56,7 +76,7 @@ One confirmation, then the setup runs:
   Setup complete! Starting Claude Code...
 ```
 
-Each step shows a live progress indicator and resolves to ✓ or ✗. On failure, the terminal stays open with a clear error and IT contact information.
+Each step shows a live progress indicator and resolves to ✓ or ✗. On failure, the terminal stays open with a clear error and the IT support contact.
 
 ### Every subsequent launch
 
@@ -79,12 +99,12 @@ Updates to both tools are checked in parallel, at most once per day, to keep sta
 Any failure at any stage stops the launcher and shows:
 
 ```
-  Something went wrong. Contact IT support: itteam@northcoastchurch.com
+  Something went wrong. Contact IT support: helpdesk@example.com
 
   Press Enter to close...
 ```
 
-The terminal stays open so the error context is visible before the user contacts support.
+The terminal stays open so the error context is visible before the user contacts support. The email shown is whatever was entered during first-time setup (stored in `~/.claude/.support_email`).
 
 ## App structure
 
@@ -108,6 +128,10 @@ The `~/Claude` directory uses `.basecamp/config.json` to set a default account a
 
 See [SECURITY.md](SECURITY.md) for a detailed walkthrough of every security decision in `launch.sh` — what risks were considered, what controls were added, and what limitations remain.
 
-## IT support
+## Configuration files
 
-Issues with the launcher? Contact [itteam@northcoastchurch.com](mailto:itteam@northcoastchurch.com).
+| File | Purpose |
+|---|---|
+| `~/.claude/.support_email` | IT support email shown on errors (set during first-time setup) |
+| `~/.claude/.last_update_check` | Timestamp for daily update throttling |
+| `~/Claude/.basecamp/config.json` | Default Basecamp account and project |
