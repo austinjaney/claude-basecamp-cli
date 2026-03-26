@@ -78,10 +78,23 @@ def render():
     # Start with transparent canvas
     buf = [TRANSPARENT] * (SIZE * SIZE)
 
-    # Paint SVG rects (scaled 2x)
+    # Scale factor for artwork within the icon (0.72 = 72% of canvas)
+    # This leaves visible background padding around the character
+    ART_SCALE = 0.72
+    ART_OFFSET = int(SIZE * (1 - ART_SCALE) / 2)  # center the artwork
+
+    # Paint SVG rects
     for (rx, ry, rw, rh, color) in RECTS:
-        sx, sy = rx * SCALE, ry * SCALE
-        sw, sh = rw * SCALE, rh * SCALE
+        if color == BG_COLOR:
+            # Background fills the entire canvas (squircle mask clips it)
+            sx, sy = rx * SCALE, ry * SCALE
+            sw, sh = rw * SCALE, rh * SCALE
+        else:
+            # Character artwork is scaled down and centered
+            sx = int(rx * SCALE * ART_SCALE) + ART_OFFSET
+            sy = int(ry * SCALE * ART_SCALE) + ART_OFFSET
+            sw = int(rw * SCALE * ART_SCALE)
+            sh = int(rh * SCALE * ART_SCALE)
         for y in range(sy, sy + sh):
             row = y * SIZE
             for x in range(sx, sx + sw):
