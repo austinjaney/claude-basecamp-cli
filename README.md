@@ -40,7 +40,6 @@ The app detects what's missing and presents a single setup screen before doing a
   This app uses Claude Code and the Basecamp CLI to let you
   manage Basecamp in plain language. The following will be set up:
 
-    • Configure IT support contact
     • Install Claude Code
     • Install Basecamp CLI
     • Connect your Basecamp account
@@ -49,19 +48,7 @@ The app detects what's missing and presents a single setup screen before doing a
   Ready to continue? [y/n]:
 ```
 
-One confirmation, then setup begins. The first step prompts for an IT support email address — this is saved locally and shown to the user if anything goes wrong in the future:
-
-```
-  IT support contact
-  If something goes wrong, this email will be shown so you
-  know who to contact for help.
-
-  IT support email address: helpdesk@example.com
-
-  ✓ Support contact saved.
-```
-
-Then the rest of the setup runs:
+One confirmation, then the setup runs:
 
 ```
   Downloading Claude Code...           ✓
@@ -102,12 +89,12 @@ Binary verification (code signature, team ID, checksum) runs on every launch. On
 Any failure at any stage stops the launcher and shows:
 
 ```
-  Something went wrong. Contact IT support: helpdesk@example.com
+  Something went wrong.
 
   Press Enter to close...
 ```
 
-The terminal stays open so the error context is visible before the user contacts support. The email shown is whatever was entered during first-time setup (stored in `~/.claude/.support_email`).
+The terminal stays open so the error context is visible.
 
 ## App structure
 
@@ -135,6 +122,5 @@ See [SECURITY.md](SECURITY.md) for a detailed walkthrough of every security deci
 
 | File | Purpose |
 |---|---|
-| `~/.claude/.support_email` | IT support email shown on errors (set during first-time setup) |
 | `~/.claude/.last_update_check` | Timestamp for daily update throttling |
 | `~/Claude/.basecamp/config.json` | Default Basecamp account and project |

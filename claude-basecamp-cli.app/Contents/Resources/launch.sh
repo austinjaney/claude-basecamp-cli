@@ -3,7 +3,6 @@ set -uo pipefail
 
 CLAUDE_TEAM_ID="Q6L2SF6YDW"
 CLAUDE_MANIFEST_BASE="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases"
-SUPPORT_EMAIL_FILE="$HOME/.claude/.support_email"
 
 TEMP_FILES=()
 SPINNER_PID=""
@@ -66,13 +65,7 @@ stop_spinner() {
 
 support_exit() {
   echo ""
-  local email=""
-  [[ -f "$SUPPORT_EMAIL_FILE" ]] && email=$(cat "$SUPPORT_EMAIL_FILE" 2>/dev/null)
-  if [[ -n "$email" ]]; then
-    echo -e "  ${RED}Something went wrong.${RESET} Contact IT support: ${email}"
-  else
-    echo -e "  ${RED}Something went wrong.${RESET}"
-  fi
+  echo -e "  ${RED}Something went wrong.${RESET}"
   echo ""
   read -r -p "  Press Enter to close..."
   exit 1
@@ -245,10 +238,6 @@ is_authenticated() {
 print_header
 refresh_path
 
-# Prompt for IT support email if not yet configured
-needs_support_email=false
-[[ ! -f "$SUPPORT_EMAIL_FILE" ]] && needs_support_email=true
-
 # Detect what setup is needed
 needs_claude=false
 needs_basecamp=false
@@ -265,15 +254,14 @@ fi
 
 [ -d "$HOME/Claude" ] || needs_folder=true
 
-if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder || $needs_support_email; then
+if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder; then
 
   echo -e "  ${BOLD}First-time setup${RESET}"
   echo "  This app uses Claude Code and the Basecamp CLI to let you"
   echo "  manage Basecamp in plain language. The following will be set up:"
   echo ""
-  $needs_support_email && echo "    • Configure IT support contact"
-  $needs_claude        && echo "    • Install Claude Code"
-  $needs_basecamp      && echo "    • Install Basecamp CLI"
+  $needs_claude   && echo "    • Install Claude Code"
+  $needs_basecamp && echo "    • Install Basecamp CLI"
   $needs_auth          && echo "    • Connect your Basecamp account"
   $needs_folder        && echo "    • Create the ~/Claude workspace"
   echo ""
@@ -288,21 +276,6 @@ if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder || $needs_su
       exit 0
       ;;
   esac
-
-  if $needs_support_email; then
-    echo -e "  ${BOLD}IT support contact${RESET}"
-    echo "  If something goes wrong, this email will be shown so you"
-    echo "  know who to contact for help."
-    echo ""
-    read -r -p "  IT support email address: " support_email
-    echo ""
-    if [[ -n "$support_email" ]]; then
-      mkdir -p "$(dirname "$SUPPORT_EMAIL_FILE")" 2>/dev/null
-      echo "$support_email" > "$SUPPORT_EMAIL_FILE"
-      echo -e "  ${GREEN}✓${RESET} Support contact saved."
-      echo ""
-    fi
-  fi
 
   $needs_claude   && install_tool "Claude Code"  "https://claude.ai/install.sh"     "claude"
   $needs_basecamp && install_tool "Basecamp CLI" "https://basecamp.com/install-cli" "basecamp"
