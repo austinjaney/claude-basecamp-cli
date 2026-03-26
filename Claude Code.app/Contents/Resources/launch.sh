@@ -226,7 +226,7 @@ install_tool() {
 # Check if basecamp auth status JSON indicates authenticated
 is_authenticated() {
   local json="$1"
-  python3 -c "import json,sys; d=json.loads(sys.stdin.read()); sys.exit(0 if d.get('authenticated') else 1)" <<< "$json" 2>/dev/null
+  python3 -c "import json,sys; d=json.loads(sys.stdin.read()); sys.exit(0 if d.get('data',{}).get('authenticated') or d.get('authenticated') else 1)" <<< "$json" 2>/dev/null
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
