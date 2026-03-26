@@ -32,7 +32,7 @@ This is convenient but dangerous — the script is streamed directly into a shel
 We changed this to download-then-execute:
 
 ```bash
-installer=$(mktemp "${TMPDIR:-/tmp}/claude-install.XXXXXX.sh")
+installer=$(mktemp "${TMPDIR:-/tmp}/installer.XXXXXX.sh")
 curl -fsSL --max-time 60 https://claude.ai/install.sh -o "$installer" || abort
 # scan and verify before running
 bash "$installer"

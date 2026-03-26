@@ -84,7 +84,6 @@ Each step shows a live progress indicator and resolves to ✓ or ✗. On failure
   Claude Code · Basecamp
   ──────────────────────────────────────────
 
-  Checking for updates...              ✓
   Verifying Claude Code...             ✓
   Verifying Basecamp CLI...            ✓
 
@@ -92,7 +91,7 @@ Each step shows a live progress indicator and resolves to ✓ or ✗. On failure
   (Just type what you want to do in plain English.)
 ```
 
-Updates to both tools are checked in parallel, at most once per day, to keep startup fast. Binary verification (code signature, team ID, checksum) runs on every launch regardless. If an update fails (no network, already latest), the current version is still verified and launched normally.
+Binary verification (code signature, team ID, checksum) runs on every launch. Once per day, a "Checking for updates..." step also appears before verification — both tools are updated in parallel. If an update fails (no network, already latest), the current version is still verified and launched normally.
 
 ### If something goes wrong
 

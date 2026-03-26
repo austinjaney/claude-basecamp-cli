@@ -18,7 +18,6 @@ Ideas that fit within the scope of a minimal Claude Code launcher. None of these
 
 - **Session logging** — Write launcher output to `~/Claude/.launcher.log` (rotating, capped size) so IT can troubleshoot without asking users to reproduce the issue.
 - **Health check flag** — `launch.sh --status` that runs all verification checks and prints a summary without launching Claude Code. Useful for MDM compliance scripts.
-- **Configurable support contact** — Move the IT email to a config file or plist key so other organizations can use the launcher without editing the script.
 - **Self-update mechanism** — Check a release URL for a newer version of the launcher itself, download and replace the .app bundle. Currently the launcher can update its dependencies but not itself.
 
 ## Multi-project support

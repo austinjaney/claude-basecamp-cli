@@ -43,7 +43,7 @@ claude v1.0.25
 
 - **Parsed by:** `grep -oE '[0-9]+\.[0-9]+\.[0-9]+'` then validated against `^[0-9]+\.[0-9]+\.[0-9]+$`
 - **Used in:** `verify_claude()` to determine which manifest to fetch
-- **Breaks if:** Anthropic changes the version output format (e.g., drops the `v` prefix and uses a non-semver scheme, or adds pre-release suffixes like `1.0.25-beta`)
+- **Breaks if:** Anthropic changes to a non-semver version scheme (e.g., two-part `1.0`, calendar-based `2026.03`), or stops including a version number in the output. Note: pre-release suffixes like `1.0.25-beta` would NOT break it — the grep still extracts `1.0.25`.
 
 ### `mdatp scan custom` (Microsoft Defender)
 
