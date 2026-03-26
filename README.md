@@ -64,13 +64,15 @@ Each step shows a live progress indicator and resolves to ✓ or ✗. On failure
   Claude Code · Basecamp
   ──────────────────────────────────────────
 
+  Checking for Claude Code updates...  ✓
+  Checking for Basecamp CLI updates... ✓
   Verifying Claude Code...             ✓
   Verifying Basecamp CLI...            ✓
 
 [Claude Code opens]
 ```
 
-The verification runs on every launch — not just after installation. It takes a few seconds and then Claude Code opens automatically.
+On every launch the app checks for updates to both tools, then verifies the installed binaries. Updates are automatic and silent — if an update fails (no network, already latest), the current version is still verified and launched normally.
 
 ### If something goes wrong
 

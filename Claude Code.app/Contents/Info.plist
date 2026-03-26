@@ -27,7 +27,13 @@
 	</dict>
 	<key>LSRequiresCarbon</key>
 	<true/>
-<key>OSAAppletShowStartupScreen</key>
+<key>CFBundleIdentifier</key>
+	<string>com.northcoastchurch.claude-code-launcher</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>OSAAppletShowStartupScreen</key>
 	<false/>
 </dict>
 </plist>

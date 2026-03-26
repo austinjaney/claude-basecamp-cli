@@ -50,7 +50,7 @@ Once the installer is on disk, we pass it to Microsoft Defender for Endpoint's c
 mdatp scan custom --path "$installer"
 ```
 
-There is no bypass path — if Defender is not installed, the install aborts. If the scan command returns a non-zero exit code, the install aborts. If the threat count in the output is greater than zero, the install aborts. The file is deleted on any of these paths.
+There is no bypass path — if Defender is not installed, the install aborts. The threat count in the scan output is always checked regardless of the exit code (some `mdatp` versions may exit zero even when threats are found). If the threat count is greater than zero, the install aborts. If the scan command returns a non-zero exit code, the install aborts. The file is deleted on any of these paths.
 
 This catches known malware signatures in the installer script itself — a layer that sits between download and execution.
 
@@ -75,7 +75,7 @@ team=$(codesign -dv "$real_bin" 2>&1 | awk -F= '/TeamIdentifier/{print $2}')
 
 The team ID `Q6L2SF6YDW` is Anthropic's identifier. It is stable across all Claude Code releases — a new version of the app will still carry this ID. Hardcoding it gives us a publisher identity check that survives upgrades without maintenance.
 
-The Basecamp CLI is also signature-verified (`codesign --verify --strict`), but its current distribution does not include a team identifier, so we can only confirm the signature is structurally valid, not that it came from a specific publisher. If Basecamp adds proper signing in the future, a team ID check should be added.
+The Basecamp CLI is signature-verified (`codesign --verify --strict`) and the signing authority is checked against Basecamp, LLC's Developer ID (`2WNYUYRS7G`). Unlike Claude Code, the Basecamp binary does not embed a `TeamIdentifier` in its codesign metadata, so we verify the full authority chain instead — specifically that the `Developer ID Application` authority contains the expected team ID.
 
 ### Step 5 — Verify the binary's checksum against Anthropic's release manifest
 
@@ -110,4 +110,12 @@ Similarly, the platform string derived from `uname` is checked against a fixed a
 
 **The manifest is trusted via TLS, not a separate signature.** The release manifest is fetched over HTTPS from Google Cloud Storage. Transport security protects against MITM, but a compromised GCS bucket could serve a manifest with attacker-controlled checksums. In that scenario, the checksum check would pass for a malicious binary. The code signature + team ID check is an independent layer that would still catch this for `claude` specifically, since forging Anthropic's Apple Developer signature would require compromising their signing certificate.
 
-**Basecamp CLI publisher identity is unconfirmed.** Without a team ID, we can verify the Basecamp binary has a structurally valid signature but cannot confirm it came from Basecamp. This should be revisited if Basecamp begins shipping with a team identifier.
+**Basecamp CLI has no manifest or checksum verification.** Unlike Claude Code, the Basecamp CLI does not publish a release manifest with per-platform checksums. The signing authority check (`Developer ID Application: Basecamp, LLC (2WNYUYRS7G)`) confirms publisher identity, but there is no independent checksum layer. If Basecamp publishes release manifests in the future, checksum verification should be added.
+
+**The version used for manifest lookup comes from executing the binary under verification.** The checksum verification in Step 5 relies on `claude --version` to determine which manifest to fetch. A malicious binary could lie about its version to match a known-good manifest checksum. This is mitigated by the code signature + team ID check (Step 4), which is an independent layer — a binary that lies about its version would still need Anthropic's valid signing certificate. The checksum is a supplementary layer, not standalone.
+
+**Certificate revocation is not checked.** The `codesign --verify --strict` call does not check certificate revocation lists by default. A signing certificate that Apple has revoked could still pass verification. Adding `--check-revocation` requires network access and may fail on offline machines. The checksum verification against Anthropic's release manifest provides an independent layer that partially compensates for this gap.
+
+**Installer scripts run with full shell capabilities.** The `bash "$installer"` call at installation time runs without restricted mode. This is necessary because installer scripts typically need to create directories, write files, modify PATH, and download additional assets — all of which `bash --restricted` would block. The Defender scan (Step 3) is the primary control that runs before execution.
+
+**Installer URLs are mutable.** The installer URLs (`https://claude.ai/install.sh`, `https://basecamp.com/install-cli`) point to whatever version the vendor is currently serving. A compromised CDN could deliver a novel payload that passes the Defender scan (which only catches known signatures). The post-install binary verification (Steps 4-5) catches tampering with the installed binary, but cannot protect against damage done by the installer script itself before the binary is placed on disk. Neither vendor publishes stable versioned installer URLs that would allow pinning.
