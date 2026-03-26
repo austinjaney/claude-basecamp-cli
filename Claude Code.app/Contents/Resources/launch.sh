@@ -243,6 +243,7 @@ is_authenticated() {
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 print_header
+refresh_path
 
 # Prompt for IT support email if not yet configured
 needs_support_email=false
