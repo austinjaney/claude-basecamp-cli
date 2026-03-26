@@ -4,57 +4,107 @@ A macOS launcher app and workspace for managing Basecamp using [Claude Code](htt
 
 ## What this is
 
-`Claude Code.app` is a double-click launcher that:
+`Claude Code.app` is a double-click launcher that handles everything needed to get Claude Code running against Basecamp — installing dependencies, verifying their integrity, authenticating, and dropping you into a ready-to-use workspace. You double-click it, and within a few seconds you're talking to Basecamp in plain language.
 
-1. Ensures Claude Code and the Basecamp CLI are installed and authenticated
-2. Verifies both binaries are legitimate before running them
-3. Opens a terminal session in `~/Claude` with Claude Code ready to go
-
-The `~/Claude` directory is a Claude Code workspace pre-configured to talk to Basecamp — you can ask Claude to read, create, and update Basecamp content in plain language.
+The `~/Claude` directory is a Claude Code workspace pre-configured with a default Basecamp account and project, so commands go to the right place without any extra flags.
 
 ## Requirements
 
 - macOS (arm64 or x86_64)
-- Microsoft Defender for Endpoint (`mdatp`) — required for installer scanning
-- Internet access on first launch (for installing Claude Code and Basecamp CLI)
+- Microsoft Defender for Endpoint (`mdatp`) — required; installation will not proceed without it
+- Internet access on first launch
 - A Basecamp account
 
-## Usage
+## The experience
 
-Double-click `Claude Code.app`. On first launch it will:
+### First launch
 
-1. Check for Claude Code — offer to install if missing
-2. Check for Basecamp CLI — offer to install if missing
-3. Verify both binaries (signature + checksum)
-4. Check Basecamp authentication — walk through login if needed
-5. Create `~/Claude` if it doesn't exist
-6. Open Claude Code in the `~/Claude` workspace
+The app detects what's missing and presents a single setup screen before doing anything:
 
-Subsequent launches skip straight to step 3 and open in a few seconds.
+```
+  Claude Code · Basecamp
+  ──────────────────────────────────────────
 
-If anything fails, the terminal stays open with an error message and IT contact information.
+  First-time setup
+  This app uses Claude Code and the Basecamp CLI to let you
+  manage Basecamp in plain language. The following will be set up:
+
+    • Install Claude Code
+    • Install Basecamp CLI
+    • Connect your Basecamp account
+    • Create the ~/Claude workspace
+
+  Ready to continue? [y/n]:
+```
+
+One confirmation, then the setup runs:
+
+```
+  Downloading Claude Code...           ✓
+  Scanning with Microsoft Defender...  ✓
+  Installing Claude Code...            ✓
+  Downloading Basecamp CLI...          ✓
+  Scanning with Microsoft Defender...  ✓
+  Installing Basecamp CLI...           ✓
+
+  Connect your Basecamp account
+  Your browser will open — sign in and return here when done.
+
+  ✓ Basecamp account connected.
+  Creating ~/Claude workspace...       ✓
+
+  Setup complete! Starting Claude Code...
+```
+
+Each step shows a live progress indicator and resolves to ✓ or ✗. On failure, the terminal stays open with a clear error and IT contact information.
+
+### Every subsequent launch
+
+```
+  Claude Code · Basecamp
+  ──────────────────────────────────────────
+
+  Verifying Claude Code...             ✓
+  Verifying Basecamp CLI...            ✓
+
+[Claude Code opens]
+```
+
+The verification runs on every launch — not just after installation. It takes a few seconds and then Claude Code opens automatically.
+
+### If something goes wrong
+
+Any failure at any stage stops the launcher and shows:
+
+```
+  Something went wrong. Contact IT support: itteam@northcoastchurch.com
+
+  Press Enter to close...
+```
+
+The terminal stays open so the error context is visible before the user contacts support.
 
 ## App structure
 
 ```
 Claude Code.app/
-├── Contents/
-│   ├── Info.plist                        # App metadata and permissions
-│   ├── MacOS/applet                      # AppleScript runtime binary
-│   └── Resources/
-│       ├── launch.sh                     # Main launcher logic (the interesting bit)
-│       └── Scripts/main.scpt            # AppleScript that runs launch.sh in Terminal
+└── Contents/
+    ├── Info.plist                   # App metadata (minimal permissions)
+    ├── MacOS/applet                 # AppleScript runtime binary
+    └── Resources/
+        ├── launch.sh               # All launcher logic lives here
+        └── Scripts/main.scpt       # Opens Terminal and runs launch.sh
 ```
 
-The AppleScript in `main.scpt` is minimal — it opens Terminal and runs `launch.sh`. All the real logic lives in `launch.sh`.
+The AppleScript in `main.scpt` is a thin wrapper — it opens Terminal and hands off to `launch.sh`. Everything meaningful happens in the shell script.
 
 ## Basecamp workspace
 
-The `~/Claude` directory uses a `.basecamp/config.json` to set a default account and project, so all `basecamp` commands target the right place without extra flags. See the [Basecamp CLI docs](https://github.com/basecamp/bc) for available commands.
+The `~/Claude` directory uses `.basecamp/config.json` to set a default account and project. All `basecamp` commands target this project unless overridden with `-p` or `-a`. See the [Basecamp CLI docs](https://github.com/basecamp/bc) for available commands.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for a full breakdown of the security design in `launch.sh`.
+See [SECURITY.md](SECURITY.md) for a detailed walkthrough of every security decision in `launch.sh` — what risks were considered, what controls were added, and what limitations remain.
 
 ## IT support
 

@@ -3,14 +3,70 @@
 CLAUDE_TEAM_ID="Q6L2SF6YDW"
 CLAUDE_MANIFEST_BASE="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases"
 
+installer=""
+SPINNER_PID=""
+cleanup() {
+  [[ -n "$SPINNER_PID" ]] && kill "$SPINNER_PID" 2>/dev/null
+  rm -f "$installer"
+}
+trap cleanup EXIT
+
+# ── UI ───────────────────────────────────────────────────────────────────────
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+print_header() {
+  echo ""
+  echo -e "${BOLD}  Claude Code · Basecamp${RESET}"
+  echo "  ──────────────────────────────────────────"
+  echo ""
+}
+
+# Print a step label and leave a trailing space for the spinner to occupy
+begin_step() {
+  printf "  %-44s " "$1"
+}
+
+# Start a background spinner on the current line (call after begin_step)
+start_spinner() {
+  (
+    local i=0 frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    while true; do
+      printf "\b${frames:$i:1}"
+      i=$(( (i + 1) % ${#frames} ))
+      sleep 0.1
+    done
+  ) &
+  SPINNER_PID=$!
+}
+
+# Stop the spinner and print ✓ or ✗ based on exit code
+stop_spinner() {
+  local code=${1:-0}
+  kill "$SPINNER_PID" 2>/dev/null
+  wait "$SPINNER_PID" 2>/dev/null
+  SPINNER_PID=""
+  printf "\b"
+  if [[ $code -eq 0 ]]; then
+    echo -e "${GREEN}✓${RESET}"
+  else
+    echo -e "${RED}✗${RESET}"
+  fi
+}
+
 support_exit() {
   echo ""
-  echo "If you need help, please contact IT support at itteam@northcoastchurch.com"
-  read -r -p "Press Enter to close..."
+  echo -e "  ${RED}Something went wrong.${RESET} Contact IT support: itteam@northcoastchurch.com"
+  echo ""
+  read -r -p "  Press Enter to close..."
   exit 1
 }
 
-# Refresh PATH to pick up freshly installed tools
+# ── Core ─────────────────────────────────────────────────────────────────────
+
 refresh_path() {
   export PATH="$PATH:$HOME/.local/bin"
   [ -f "$HOME/.profile" ] && source "$HOME/.profile" 2>/dev/null || true
@@ -24,22 +80,21 @@ verify_claude() {
   real_bin=$(codesign -dv "$bin" 2>&1 | awk -F= '/^Executable/{print $2}')
   [[ -z "$real_bin" ]] && real_bin="$bin"
 
-  # Code signature + team ID check
   if ! codesign --verify --strict "$real_bin" 2>/dev/null; then
-    echo "ERROR: claude binary has an invalid signature. Aborting."
-    return 1
-  fi
-  local team
-  team=$(codesign -dv "$real_bin" 2>&1 | awk -F= '/TeamIdentifier/{print $2}')
-  if [[ "$team" != "$CLAUDE_TEAM_ID" ]]; then
-    echo "ERROR: claude binary team ID '$team' does not match expected '$CLAUDE_TEAM_ID'. Aborting."
+    echo "Invalid signature on claude binary."
     return 1
   fi
 
-  # Manifest checksum check
+  local team
+  team=$(codesign -dv "$real_bin" 2>&1 | awk -F= '/TeamIdentifier/{print $2}')
+  if [[ "$team" != "$CLAUDE_TEAM_ID" ]]; then
+    echo "Unexpected team ID '$team' on claude binary (expected '$CLAUDE_TEAM_ID')."
+    return 1
+  fi
+
   version=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-  if [[ -z "$version" ]]; then
-    echo "ERROR: Could not determine claude version. Aborting."
+  if [[ -z "$version" || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Could not determine claude version."
     return 1
   fi
 
@@ -50,9 +105,17 @@ verify_claude() {
   [[ "$arch" == "arm64" || "$arch" == "aarch64" ]] && arch="arm64"
   platform="${os}-${arch}"
 
+  case "$platform" in
+    darwin-arm64|darwin-x64|linux-arm64|linux-x64) ;;
+    *)
+      echo "Unsupported platform '$platform'."
+      return 1
+      ;;
+  esac
+
   manifest=$(curl -fsSL --max-time 30 "${CLAUDE_MANIFEST_BASE}/${version}/manifest.json" 2>/dev/null)
   if [[ -z "$manifest" ]]; then
-    echo "ERROR: Could not fetch manifest for claude v${version}. Aborting."
+    echo "Could not fetch release manifest for v${version}."
     return 1
   fi
 
@@ -64,141 +127,186 @@ print(p.get('checksum', ''))
 " "$platform" <<< "$manifest")
 
   if [[ -z "$checksum" ]]; then
-    echo "ERROR: No checksum found in manifest for platform '$platform'. Aborting."
+    echo "No checksum in manifest for platform '$platform'."
     return 1
   fi
 
   actual_checksum=$(shasum -a 256 "$real_bin" | awk '{print $1}')
   if [[ "$actual_checksum" != "$checksum" ]]; then
-    echo "ERROR: claude binary checksum mismatch."
+    echo "Checksum mismatch on claude binary."
     echo "  Expected: $checksum"
     echo "  Got:      $actual_checksum"
     return 1
   fi
 }
 
-scan_installer() {
-  local file="$1" label="$2" scan_output threats
-
-  if ! command -v mdatp &>/dev/null; then
-    echo "ERROR: Microsoft Defender (mdatp) not found. Cannot scan $label installer. Aborting."
-    return 1
-  fi
-
-  echo "Scanning $label installer with Microsoft Defender..."
-  scan_output=$(mdatp scan custom --path "$file" 2>&1)
-  local exit_code=$?
-
-  if [[ $exit_code -ne 0 ]]; then
-    echo "ERROR: Defender scan failed for $label installer (exit code $exit_code). Aborting."
-    echo "$scan_output"
-    return 1
-  fi
-
-  threats=$(echo "$scan_output" | grep -oE '[0-9]+ threat' | grep -oE '^[0-9]+')
-  if [[ "${threats:-0}" -gt 0 ]]; then
-    echo "ERROR: Defender detected ${threats} threat(s) in $label installer. Aborting."
-    echo "$scan_output"
-    return 1
-  fi
-
-  echo "Defender scan passed for $label installer."
-}
-
 verify_basecamp() {
   local bin
   bin=$(command -v basecamp) || return 1
   if ! codesign --verify --strict "$bin" 2>/dev/null; then
-    echo "ERROR: basecamp binary has an invalid signature. Aborting."
+    echo "Invalid signature on basecamp binary."
     return 1
   fi
 }
 
-# Check for Claude Code
-if ! command -v claude &>/dev/null; then
-  echo "Claude Code is not installed."
-  read -r -p "Install it now? [y/n]: " answer
+# Download, scan, and install a tool from a URL
+# Usage: install_tool "Label" "url" "binary-name"
+install_tool() {
+  local label="$1" url="$2" bin_name="$3"
+  local log
+  log=$(mktemp "${TMPDIR:-/tmp}/install-log.XXXXXX")
+
+  begin_step "Downloading ${label}..."
+  start_spinner
+  installer=$(mktemp "${TMPDIR:-/tmp}/installer.XXXXXX.sh")
+  curl -fsSL --max-time 60 "$url" -o "$installer" >"$log" 2>&1
+  local code=$?
+  stop_spinner $code
+  if [[ $code -ne 0 ]]; then
+    echo ""; cat "$log"; rm -f "$log"; support_exit
+  fi
+
+  begin_step "Scanning with Microsoft Defender..."
+  start_spinner
+  if ! command -v mdatp &>/dev/null; then
+    stop_spinner 1
+    echo "  Microsoft Defender (mdatp) not found."
+    rm -f "$log"; support_exit
+  fi
+  mdatp scan custom --path "$installer" >"$log" 2>&1
+  code=$?
+  stop_spinner $code
+  if [[ $code -ne 0 ]]; then
+    local threats
+    threats=$(grep -oE '[0-9]+ threats?' "$log" | grep -oE '^[0-9]+')
+    if [[ "${threats:-0}" -gt 0 ]]; then
+      echo "  Defender detected ${threats} threat(s)."
+    else
+      echo "  Defender scan failed."
+    fi
+    rm -f "$log"; support_exit
+  fi
+
+  begin_step "Installing ${label}..."
+  start_spinner
+  bash "$installer" >"$log" 2>&1
+  code=$?
+  stop_spinner $code
+  installer=""
+  if [[ $code -ne 0 ]]; then
+    echo ""; cat "$log"; rm -f "$log"; support_exit
+  fi
+
+  rm -f "$log"
+  refresh_path
+
+  if ! command -v "$bin_name" &>/dev/null; then
+    echo "  Installation finished but '${bin_name}' was not found in PATH."
+    support_exit
+  fi
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+print_header
+
+# Detect what setup is needed
+needs_claude=false
+needs_basecamp=false
+needs_auth=false
+needs_folder=false
+
+command -v claude &>/dev/null   || needs_claude=true
+command -v basecamp &>/dev/null || needs_basecamp=true
+
+if ! $needs_basecamp; then
+  auth_check=$(basecamp auth status --json 2>/dev/null)
+  grep -q '"authenticated": true' <<< "$auth_check" || needs_auth=true
+fi
+
+[ -d "$HOME/Claude" ] || needs_folder=true
+
+if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder; then
+
+  echo -e "  ${BOLD}First-time setup${RESET}"
+  echo "  This app uses Claude Code and the Basecamp CLI to let you"
+  echo "  manage Basecamp in plain language. The following will be set up:"
+  echo ""
+  $needs_claude   && echo "    • Install Claude Code"
+  $needs_basecamp && echo "    • Install Basecamp CLI"
+  $needs_auth     && echo "    • Connect your Basecamp account"
+  $needs_folder   && echo "    • Create the ~/Claude workspace"
+  echo ""
+  read -r -p "  Ready to continue? [y/n]: " answer
+  echo ""
+
   case "$answer" in
-    [Yy])
-      echo "Installing Claude Code..."
-      installer=$(mktemp /tmp/claude-install.XXXXXX.sh)
-      curl -fsSL --max-time 60 https://claude.ai/install.sh -o "$installer" || { rm -f "$installer"; echo "ERROR: Failed to download Claude Code installer."; support_exit; }
-      scan_installer "$installer" "Claude Code" || { rm -f "$installer"; support_exit; }
-      bash "$installer"
-      rm -f "$installer"
-      refresh_path
-      if ! command -v claude &>/dev/null; then
-        echo "Installation failed. Please install Claude Code manually and try again."
-        support_exit
-      fi
-      echo "Claude Code installed successfully."
-      ;;
+    [Yy]) ;;
     *)
-      echo "Exiting."
-      exit 1
+      echo "  No changes were made. You can relaunch this app whenever you're ready."
+      echo ""
+      exit 0
       ;;
   esac
-fi
-verify_claude || support_exit
 
-# Check for Basecamp CLI
-if ! command -v basecamp &>/dev/null; then
-  echo "Basecamp CLI is not installed."
-  read -r -p "Install it now? [y/n]: " answer
-  case "$answer" in
-    [Yy])
-      echo "Installing Basecamp CLI..."
-      installer=$(mktemp /tmp/basecamp-install.XXXXXX.sh)
-      curl -fsSL --max-time 60 https://basecamp.com/install-cli -o "$installer" || { rm -f "$installer"; echo "ERROR: Failed to download Basecamp CLI installer."; support_exit; }
-      scan_installer "$installer" "Basecamp CLI" || { rm -f "$installer"; support_exit; }
-      bash "$installer"
-      rm -f "$installer"
-      refresh_path
-      if ! command -v basecamp &>/dev/null; then
-        echo "Installation failed. Please install Basecamp CLI manually and try again."
-        support_exit
-      fi
-      echo "Basecamp CLI installed successfully."
-      ;;
-    *)
-      echo "Exiting."
-      exit 1
-      ;;
-  esac
-fi
-verify_basecamp || support_exit
+  $needs_claude   && install_tool "Claude Code"  "https://claude.ai/install.sh"     "claude"
+  $needs_basecamp && install_tool "Basecamp CLI" "https://basecamp.com/install-cli" "basecamp"
 
-# Check Basecamp authentication
-auth_status=$(basecamp auth status --json 2>/dev/null)
-if ! grep -q '"authenticated": true' <<< "$auth_status"; then
-  echo "Basecamp is not authenticated."
-  read -r -p "Set up Basecamp authentication now? [y/n]: " answer
-  case "$answer" in
-    [Yy])
-      basecamp auth login
-      auth_status=$(basecamp auth status --json 2>/dev/null)
-      if ! grep -q '"authenticated": true' <<< "$auth_status"; then
-        echo "Authentication failed. Please run 'basecamp auth login' manually and try again."
-        support_exit
-      fi
-      echo "Basecamp authenticated successfully."
-      ;;
-    *)
-      echo "Exiting."
-      exit 1
-      ;;
-  esac
+  if $needs_auth; then
+    echo ""
+    echo -e "  ${BOLD}Connect your Basecamp account${RESET}"
+    echo "  Your browser will open — sign in and return here when done."
+    echo ""
+    basecamp auth login
+    echo ""
+    auth_check=$(basecamp auth status --json 2>/dev/null)
+    if ! grep -q '"authenticated": true' <<< "$auth_check"; then
+      echo "  Basecamp authentication failed."
+      support_exit
+    fi
+    echo -e "  ${GREEN}✓${RESET} Basecamp account connected."
+  fi
+
+  if $needs_folder; then
+    begin_step "Creating ~/Claude workspace..."
+    start_spinner
+    mkdir -p "$HOME/Claude" >/dev/null 2>&1
+    code=$?
+    stop_spinner $code
+    if [[ $code -ne 0 ]]; then
+      echo "  Could not create ~/Claude."
+      support_exit
+    fi
+  fi
+
+  echo ""
+  echo -e "  ${GREEN}${BOLD}Setup complete!${RESET} Starting Claude Code..."
+  sleep 1
+  echo ""
+
 fi
 
-# Check for ~/Claude folder
-if [ ! -d ~/Claude ]; then
-  echo "~/Claude folder not found."
-  read -r -p "Create it now? [y/n]: " answer
-  case "$answer" in
-    [Yy]) mkdir -p ~/Claude && echo "Created ~/Claude." ;;
-    *) echo "Exiting."; exit 1 ;;
-  esac
+# Verify both binaries on every launch
+begin_step "Verifying Claude Code..."
+start_spinner
+output=$(verify_claude 2>&1)
+code=$?
+stop_spinner $code
+if [[ $code -ne 0 ]]; then
+  echo "  $output"
+  support_exit
 fi
 
-cd ~/Claude || support_exit
+begin_step "Verifying Basecamp CLI..."
+start_spinner
+output=$(verify_basecamp 2>&1)
+code=$?
+stop_spinner $code
+if [[ $code -ne 0 ]]; then
+  echo "  $output"
+  support_exit
+fi
+
+sleep 0.5
+cd "$HOME/Claude" || support_exit
 clear && claude

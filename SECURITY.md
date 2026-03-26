@@ -1,88 +1,113 @@
 # Security Design — Claude Code.app
 
-This document describes the security decisions in `Claude Code.app/Contents/Resources/launch.sh` and the reasoning behind them.
+This document walks through every security decision in `Claude Code.app/Contents/Resources/launch.sh` — what risk each one addresses, how it works, and what tradeoffs were made. It's written so that someone maintaining this later can understand not just *what* the controls are, but *why* they exist.
 
-## Threat model
+## The threat model
 
-The launcher downloads and executes third-party software (Claude Code, Basecamp CLI) and runs them with the current user's privileges. The primary threats are:
+The launcher's job is to download and execute third-party software (Claude Code, Basecamp CLI) using the current user's credentials. That makes it an attractive target. The threats we designed against are:
 
-- A tampered or substituted binary (supply chain compromise, local replacement)
-- A malicious installer script delivered via MITM or compromised CDN
-- The app requesting unnecessary system permissions
+- **Supply chain compromise** — a tampered binary delivered via a compromised CDN or package source
+- **Binary substitution** — a legitimate-looking executable that isn't actually from Anthropic or Basecamp
+- **Malicious installer** — a script delivered over the network that does damage before the binary is even placed on disk
+- **Excessive app permissions** — the launcher itself requesting system access it doesn't need
 
-## Controls
+## The security story, step by step
 
-### 1. Pruned app permissions
+### Step 1 — Strip the app's own permissions
 
-The `Info.plist` declares only the permissions the app actually needs. All unnecessary usage description keys (camera, microphone, contacts, calendar, HomeKit, photos, music, reminders, Siri, system administration) were removed. Any permissions Claude Code or Basecamp actually require at runtime are requested by Terminal.app, not by this launcher.
+The first question we asked was: what does this launcher actually need access to? The answer is nothing — it opens Terminal and runs a shell script. Yet the default AppleScript applet template ships with usage descriptions for camera, microphone, contacts, calendar, HomeKit, photos, music, reminders, Siri, and system administration declared in `Info.plist`.
 
-### 2. Download-then-execute (no curl-pipe-bash)
+We removed all of them. Any permissions that Claude Code or Basecamp actually need at runtime are requested by Terminal.app in context, not pre-declared by the launcher. The launcher's `Info.plist` is now minimal.
 
-Installers are never piped directly to a shell:
+### Step 2 — Don't pipe the internet directly into bash
+
+The standard install pattern for both Claude Code and Basecamp CLI is:
 
 ```bash
-# What we don't do
 curl -fsSL https://example.com/install.sh | bash
-
-# What we do instead
-installer=$(mktemp /tmp/claude-install.XXXXXX.sh)
-curl -fsSL --max-time 60 https://example.com/install.sh -o "$installer" || abort
-# ... scan and verify ...
-bash "$installer"
-rm -f "$installer"
 ```
 
-The installer lands in a temp file (mode 600 — owner only) before anything runs. The download exit code is checked; a failed download aborts before reaching execution.
+This is convenient but dangerous — the script is streamed directly into a shell with no opportunity to inspect or verify it. A MITM, a DNS hijack, or a compromised CDN delivers code that runs immediately.
 
-### 3. Microsoft Defender scan
-
-Before executing any downloaded installer, `mdatp scan custom --path` is called against the temp file. If Defender is not present or the scan fails, the install aborts — there is no bypass path.
-
-```
-Defender missing      → abort
-Scan command errors   → abort
-Threats detected > 0  → abort
-Scan passes           → proceed to execute
-```
-
-The installer temp file is removed immediately after execution (or on any abort path).
-
-### 4. Binary verification — code signature + team ID
-
-After installation (and on every subsequent launch), the installed binary is verified against Anthropic's Apple Developer team ID before Claude Code is allowed to run:
+We changed this to download-then-execute:
 
 ```bash
-codesign --verify --strict "$real_bin"           # valid signature
-codesign -dv "$real_bin" | grep TeamIdentifier   # must match Q6L2SF6YDW
+installer=$(mktemp "${TMPDIR:-/tmp}/claude-install.XXXXXX.sh")
+curl -fsSL --max-time 60 https://claude.ai/install.sh -o "$installer" || abort
+# scan and verify before running
+bash "$installer"
 ```
 
-The team ID `Q6L2SF6YDW` is Anthropic's and is stable across releases. A mismatched or unsigned binary is rejected regardless of how it got there.
+The installer lands in a temp file at mode 600 (owner read/write only — no other user can see or modify it) before anything executes. We use `$TMPDIR` rather than `/tmp` because on macOS `$TMPDIR` resolves to a user-private directory under `/var/folders`, whereas `/tmp` is world-accessible. The curl exit code is checked — a failed download aborts immediately rather than executing an empty or partial file.
 
-The Basecamp CLI is signature-verified (`codesign --verify --strict`) but has no team ID in its current distribution, so publisher identity cannot be confirmed for that binary.
+A `trap cleanup EXIT` at the top of the script ensures the temp file is removed on every exit path, including Ctrl+C.
 
-### 5. Binary verification — manifest checksum
+### Step 3 — Scan every installer with Microsoft Defender before running it
 
-In addition to the code signature, the `claude` binary is verified against the SHA-256 checksum published in Anthropic's release manifest:
+Once the installer is on disk, we pass it to Microsoft Defender for Endpoint's command-line scanner before executing it:
+
+```bash
+mdatp scan custom --path "$installer"
+```
+
+There is no bypass path — if Defender is not installed, the install aborts. If the scan command returns a non-zero exit code, the install aborts. If the threat count in the output is greater than zero, the install aborts. The file is deleted on any of these paths.
+
+This catches known malware signatures in the installer script itself — a layer that sits between download and execution.
+
+### Step 4 — Verify the binary's code signature and publisher identity
+
+After installation, and again on every subsequent launch, we verify the installed binary before allowing it to run. For Claude Code, this is a two-part check.
+
+First, we resolve the real binary on disk. The Claude Code installer places a versioned binary at `~/.local/share/claude/versions/<version>` and creates a symlink at `~/.local/bin/claude`. We use `codesign -dv` to find the actual executable path rather than trusting the symlink.
+
+Then we verify the signature:
+
+```bash
+codesign --verify --strict "$real_bin"
+```
+
+And check the Apple Developer team ID matches Anthropic's:
+
+```bash
+team=$(codesign -dv "$real_bin" 2>&1 | awk -F= '/TeamIdentifier/{print $2}')
+# must equal Q6L2SF6YDW
+```
+
+The team ID `Q6L2SF6YDW` is Anthropic's identifier. It is stable across all Claude Code releases — a new version of the app will still carry this ID. Hardcoding it gives us a publisher identity check that survives upgrades without maintenance.
+
+The Basecamp CLI is also signature-verified (`codesign --verify --strict`), but its current distribution does not include a team identifier, so we can only confirm the signature is structurally valid, not that it came from a specific publisher. If Basecamp adds proper signing in the future, a team ID check should be added.
+
+### Step 5 — Verify the binary's checksum against Anthropic's release manifest
+
+A binary can have a valid Anthropic signature and still not match what Anthropic actually shipped for a given version. To catch this case, we fetch the release manifest for the exact installed version:
 
 ```
-https://storage.googleapis.com/.../claude-code-releases/{VERSION}/manifest.json
+https://storage.googleapis.com/claude-code-dist-.../claude-code-releases/{VERSION}/manifest.json
 ```
 
-The manifest is fetched for the exact installed version, the platform-specific checksum is extracted via `python3` (with `$platform` passed as an argument, never interpolated into code), and compared against `shasum -a 256` of the real binary on disk.
+The manifest contains per-platform SHA-256 checksums. We detect the current platform from `uname`, validate it against an allowlist (`darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`), extract the expected checksum via Python's `json` module (with the platform string passed as an argument — never interpolated into code), and compare it against `shasum -a 256` of the binary on disk.
 
-This catches a binary that is validly signed but does not match what Anthropic actually shipped for that version.
+A mismatch hard-aborts. The code signature check and the checksum check are independent layers — a compromised binary would have to defeat both.
 
-### 6. curl timeouts
+### Step 6 — Add timeouts to every network call
 
-All `curl` calls have explicit `--max-time` limits to prevent the launcher from hanging indefinitely on a slow or unresponsive server:
+All `curl` calls include `--max-time` to prevent the launcher from hanging indefinitely:
 
-- Manifest fetch: 30 seconds
-- Installer downloads: 60 seconds
+- Manifest fetch: 30 seconds (small JSON file)
+- Installer downloads: 60 seconds (reasonable for a shell script over a typical connection)
+
+A server that never responds is treated the same as a server that returns an error.
+
+### Step 7 — Validate inputs before using them in network requests
+
+The version string extracted from `claude --version` is validated against a strict regex (`^[0-9]+\.[0-9]+\.[0-9]+$`) before being interpolated into the manifest URL. If the output of `claude --version` is unexpected or malformed, we abort rather than constructing a potentially bad URL.
+
+Similarly, the platform string derived from `uname` is checked against a fixed allowlist before being used as a JSON key. An unrecognised platform aborts rather than producing a silent lookup failure.
 
 ## Known limitations
 
-**Manifest trust anchor.** The release manifest is fetched over HTTPS from Google Cloud Storage. Transport security (TLS) protects against MITM, but a compromised GCS bucket could serve a manifest with attacker-controlled checksums, which would cause the checksum check to pass for a malicious binary. The code signature + team ID check is a separate and independent layer that would still catch this scenario for `claude`.
+**The installer script has no cryptographic verification.** The Defender scan checks for known malware signatures, but the installer has no GPG signature or published checksum we can verify before running it. A compromised CDN could deliver a malicious installer that causes damage before the binary verification step runs. This is a fundamental limitation of the curl-based installer model used by both Anthropic and Basecamp — the controls downstream (signature, team ID, checksum) verify the *result* of installation, not the installer itself.
 
-**Installer not verified before execution.** The Defender scan and download-exit-code check reduce risk, but the installer script itself has no cryptographic verification (no GPG signature, no checksum). A compromised CDN could deliver a malicious installer that causes damage before the binary verification step runs. This is a fundamental limitation of the curl-based installer model used by both Anthropic and Basecamp.
+**The manifest is trusted via TLS, not a separate signature.** The release manifest is fetched over HTTPS from Google Cloud Storage. Transport security protects against MITM, but a compromised GCS bucket could serve a manifest with attacker-controlled checksums. In that scenario, the checksum check would pass for a malicious binary. The code signature + team ID check is an independent layer that would still catch this for `claude` specifically, since forging Anthropic's Apple Developer signature would require compromising their signing certificate.
 
-**Basecamp CLI has no team ID.** The Basecamp binary ships without an Apple Developer team identifier, so publisher identity cannot be confirmed beyond "the signature is structurally valid." If Basecamp begins publishing a properly signed binary this check should be extended to include a team ID assertion.
+**Basecamp CLI publisher identity is unconfirmed.** Without a team ID, we can verify the Basecamp binary has a structurally valid signature but cannot confirm it came from Basecamp. This should be revisited if Basecamp begins shipping with a team identifier.
