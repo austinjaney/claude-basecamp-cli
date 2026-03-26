@@ -103,6 +103,10 @@ verify_claude() {
     echo "Could not determine claude version."
     return 1
   fi
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Malformed version string '$version'."
+    return 1
+  fi
 
   local arch
   arch=$(uname -m)
@@ -356,6 +360,9 @@ if [[ $basecamp_code -ne 0 ]]; then
   support_exit
 fi
 
-sleep 0.5
+echo ""
+echo "  Everything is ready. Opening Claude Code..."
+echo "  (Just type what you want to do in plain English.)"
+sleep 1.5
 cd "$HOME/Claude" || support_exit
 clear && claude

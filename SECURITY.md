@@ -85,7 +85,7 @@ A binary can have a valid Anthropic signature and still not match what Anthropic
 https://storage.googleapis.com/claude-code-dist-.../claude-code-releases/{VERSION}/manifest.json
 ```
 
-The manifest contains per-platform SHA-256 checksums. We detect the current platform from `uname`, validate it against an allowlist (`darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`), extract the expected checksum via Python's `json` module (with the platform string passed as an argument — never interpolated into code), and compare it against `shasum -a 256` of the binary on disk.
+The manifest contains per-platform SHA-256 checksums. We detect the current platform from `uname`, validate it against an allowlist (`darwin-arm64`, `darwin-x64`), extract the expected checksum via Python's `json` module (with the platform string passed as an argument — never interpolated into code), and compare it against `shasum -a 256` of the binary on disk.
 
 A mismatch hard-aborts. The code signature check and the checksum check are independent layers — a compromised binary would have to defeat both.
 
