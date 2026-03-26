@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Icons/AppIcon_1024x1024.png" alt="Claude Code · Basecamp" width="128">
+</p>
+
 # claude-basecamp-cli
 
 A macOS launcher app and workspace for managing Basecamp using [Claude Code](https://claude.ai/code) and the [Basecamp CLI](https://github.com/basecamp/bc).
