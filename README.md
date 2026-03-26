@@ -8,7 +8,7 @@ A macOS launcher app and workspace for managing Basecamp using [Claude Code](htt
 
 ## What this is
 
-`Claude Code.app` is a double-click launcher that handles everything needed to get Claude Code running against Basecamp — installing dependencies, verifying their integrity, authenticating, and dropping you into a ready-to-use workspace. You double-click it, and within a few seconds you're talking to Basecamp in plain language.
+`claude-basecamp-cli.app` is a double-click launcher that handles everything needed to get Claude Code running against Basecamp — installing dependencies, verifying their integrity, authenticating, and dropping you into a ready-to-use workspace. You double-click it, and within a few seconds you're talking to Basecamp in plain language.
 
 The `~/Claude` directory is a Claude Code workspace pre-configured with a default Basecamp account and project, so commands go to the right place without any extra flags.
 
@@ -112,7 +112,7 @@ The terminal stays open so the error context is visible before the user contacts
 ## App structure
 
 ```
-Claude Code.app/
+claude-basecamp-cli.app/
 └── Contents/
     ├── Info.plist                   # App metadata (minimal permissions)
     ├── MacOS/applet                 # AppleScript runtime binary

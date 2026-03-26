@@ -1,6 +1,6 @@
-# Security Design — Claude Code.app
+# Security Design — claude-basecamp-cli.app
 
-This document walks through every security decision in `Claude Code.app/Contents/Resources/launch.sh` — what risk each one addresses, how it works, and what tradeoffs were made. It's written so that someone maintaining this later can understand not just *what* the controls are, but *why* they exist.
+This document walks through every security decision in `claude-basecamp-cli.app/Contents/Resources/launch.sh` — what risk each one addresses, how it works, and what tradeoffs were made. It's written so that someone maintaining this later can understand not just *what* the controls are, but *why* they exist.
 
 ## The threat model
 
