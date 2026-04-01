@@ -31,6 +31,8 @@
 	<string>1</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>This app opens Terminal to run the Claude Code launcher script.</string>
 	<key>OSAAppletShowStartupScreen</key>
 	<false/>
 </dict>
