@@ -26,20 +26,18 @@ Before distributing this app, ensure the following are in place on target machin
 
 No other dependencies are needed — Claude Code and the Basecamp CLI are installed automatically on first launch.
 
-## First-time setup on a new machine
+## Getting started
 
-Because this app is not distributed through the Mac App Store, macOS Gatekeeper will block it on first launch. To open it:
+1. **Download** this repo as a zip from GitHub and extract it.
+2. **Remove the quarantine flag** so macOS will run the app. Open Terminal, drag `claude-basecamp-cli.app` into the window after typing the command, and press Return:
+   ```bash
+   xattr -d com.apple.quarantine 
+   ```
+3. **Double-click** `claude-basecamp-cli.app`. The app will walk through the rest — installing Claude Code and the Basecamp CLI, signing in to both, and creating your workspace.
 
-1. Right-click `claude-basecamp-cli.app` in Finder
-2. Choose **Open**
-3. Click **Open** in the dialog that appears
+After that first run the app opens normally every time.
 
-After that first approval the app opens normally on every subsequent launch.
-
-Alternatively, IT admins deploying via MDM can clear the quarantine attribute at enrollment time:
-```bash
-xattr -d com.apple.quarantine claude-basecamp-cli.app
-```
+> **IT / MDM deployment:** run the `xattr` command above at enrollment time so users never see the Gatekeeper prompt.
 
 ## The experience
 
