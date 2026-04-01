@@ -241,29 +241,41 @@ refresh_path
 # Detect what setup is needed
 needs_claude=false
 needs_basecamp=false
+needs_claude_auth=false
 needs_auth=false
 needs_folder=false
 
 command -v claude &>/dev/null   || needs_claude=true
 command -v basecamp &>/dev/null || needs_basecamp=true
 
-if ! $needs_basecamp; then
+# A fresh claude install will always need auth; otherwise check current status
+if $needs_claude; then
+  needs_claude_auth=true
+else
+  claude auth status &>/dev/null || needs_claude_auth=true
+fi
+
+# A fresh basecamp install will always need auth; otherwise check current status
+if $needs_basecamp; then
+  needs_auth=true
+else
   auth_check=$(basecamp auth status --json 2>/dev/null || true)
   is_authenticated "$auth_check" || needs_auth=true
 fi
 
 [ -d "$HOME/Claude" ] || needs_folder=true
 
-if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder; then
+if $needs_claude || $needs_basecamp || $needs_claude_auth || $needs_auth || $needs_folder; then
 
   echo -e "  ${BOLD}First-time setup${RESET}"
   echo "  This app uses Claude Code and the Basecamp CLI to let you"
   echo "  manage Basecamp in plain language. The following will be set up:"
   echo ""
-  $needs_claude   && echo "    • Install Claude Code"
-  $needs_basecamp && echo "    • Install Basecamp CLI"
-  $needs_auth          && echo "    • Connect your Basecamp account"
-  $needs_folder        && echo "    • Create the ~/Claude workspace"
+  $needs_claude      && echo "    • Install Claude Code"
+  $needs_basecamp    && echo "    • Install Basecamp CLI"
+  $needs_claude_auth && echo "    • Sign in to Claude"
+  $needs_auth        && echo "    • Connect your Basecamp account"
+  $needs_folder      && echo "    • Create the ~/Claude workspace"
   echo ""
   read -r -p "  Ready to continue? [y/n]: " answer
   echo ""
@@ -279,6 +291,20 @@ if $needs_claude || $needs_basecamp || $needs_auth || $needs_folder; then
 
   $needs_claude   && install_tool "Claude Code"  "https://claude.ai/install.sh"     "claude"
   $needs_basecamp && install_tool "Basecamp CLI" "https://basecamp.com/install-cli" "basecamp"
+
+  if $needs_claude_auth; then
+    echo ""
+    echo -e "  ${BOLD}Sign in to Claude${RESET}"
+    echo "  Your browser will open — sign in and return here when done."
+    echo ""
+    claude auth login
+    echo ""
+    if ! claude auth status &>/dev/null; then
+      echo "  Claude authentication failed."
+      support_exit
+    fi
+    echo -e "  ${GREEN}✓${RESET} Claude account connected."
+  fi
 
   if $needs_auth; then
     echo ""

@@ -42,6 +42,7 @@ The app detects what's missing and presents a single setup screen before doing a
 
     • Install Claude Code
     • Install Basecamp CLI
+    • Sign in to Claude
     • Connect your Basecamp account
     • Create the ~/Claude workspace
 
@@ -57,6 +58,11 @@ One confirmation, then the setup runs:
   Downloading Basecamp CLI...          ✓
   Scanning with Microsoft Defender...  ✓
   Installing Basecamp CLI...           ✓
+
+  Sign in to Claude
+  Your browser will open — sign in and return here when done.
+
+  ✓ Claude account connected.
 
   Connect your Basecamp account
   Your browser will open — sign in and return here when done.
@@ -124,3 +130,13 @@ See [SECURITY.md](SECURITY.md) for a detailed walkthrough of every security deci
 |---|---|
 | `~/.claude/.last_update_check` | Timestamp for daily update throttling |
 | `~/Claude/.basecamp/config.json` | Default Basecamp account and project |
+
+## Development
+
+After editing any file inside `claude-basecamp-cli.app` (including `launch.sh`), re-sign the bundle before committing:
+
+```bash
+make sign
+```
+
+This strips extended attributes and applies a fresh ad-hoc signature. Skipping this step invalidates the bundle signature, which prevents macOS from displaying the app icon for anyone who clones the repo.

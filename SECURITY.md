@@ -75,7 +75,7 @@ team=$(codesign -dv "$real_bin" 2>&1 | awk -F= '/TeamIdentifier/{print $2}')
 
 The team ID `Q6L2SF6YDW` is Anthropic's identifier. It is stable across all Claude Code releases — a new version of the app will still carry this ID. Hardcoding it gives us a publisher identity check that survives upgrades without maintenance.
 
-The Basecamp CLI is signature-verified (`codesign --verify --strict`) and the signing authority is checked against Basecamp, LLC's Developer ID (`2WNYUYRS7G`). Unlike Claude Code, the Basecamp binary does not embed a `TeamIdentifier` in its codesign metadata, so we verify the full authority chain instead — specifically that the `Developer ID Application` authority contains the expected team ID.
+The Basecamp CLI is signature-verified (`codesign --verify --strict`) and the signing authority is checked against Basecamp, LLC's Developer ID (`2WNYUYRS7G`). Unlike Claude Code, the Basecamp binary does not embed a `TeamIdentifier` in its codesign metadata (last confirmed not set: 2026-03-25), so we verify the full authority chain instead — specifically that the `Developer ID Application` authority contains the expected team ID. If Basecamp adds a `TeamIdentifier`, `verify_basecamp()` should be updated to use the same direct check as `verify_claude()` — see DEPENDENCIES.md for details.
 
 ### Step 5 — Verify the binary's checksum against Anthropic's release manifest
 

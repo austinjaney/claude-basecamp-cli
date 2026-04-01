@@ -35,6 +35,8 @@ Authority=Developer ID Application: Basecamp, LLC (2WNYUYRS7G)
 - **Used in:** `verify_basecamp()` to confirm the signing authority
 - **Breaks if:** Apple changes the authority line format, or Basecamp changes their Developer ID certificate name
 
+> **Check periodically:** The Basecamp CLI binary currently shows `TeamIdentifier=not set` in `codesign -dv` output. If Basecamp ever embeds a `TeamIdentifier` (as Anthropic does for Claude Code), `verify_basecamp()` can be simplified to match `verify_claude()` — dropping the verbose authority-chain parse in favour of a direct `TeamIdentifier` check. Run `codesign -dv $(which basecamp)` to check. Last confirmed not set: 2026-03-25.
+
 ### `claude --version`
 
 ```
