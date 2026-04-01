@@ -26,6 +26,21 @@ Before distributing this app, ensure the following are in place on target machin
 
 No other dependencies are needed — Claude Code and the Basecamp CLI are installed automatically on first launch.
 
+## First-time setup on a new machine
+
+Because this app is not distributed through the Mac App Store, macOS Gatekeeper will block it on first launch. To open it:
+
+1. Right-click `claude-basecamp-cli.app` in Finder
+2. Choose **Open**
+3. Click **Open** in the dialog that appears
+
+After that first approval the app opens normally on every subsequent launch.
+
+Alternatively, IT admins deploying via MDM can clear the quarantine attribute at enrollment time:
+```bash
+xattr -d com.apple.quarantine claude-basecamp-cli.app
+```
+
 ## The experience
 
 ### First launch
@@ -139,4 +154,10 @@ After editing any file inside `claude-basecamp-cli.app` (including `launch.sh`),
 make sign
 ```
 
-This strips extended attributes and applies a fresh ad-hoc signature. Skipping this step invalidates the bundle signature, which prevents macOS from displaying the app icon for anyone who clones the repo.
+This rebuilds `applet.icns` from `Icons/AppIcon_1024x1024.png` at all required macOS sizes, strips extended attributes, and applies a fresh ad-hoc signature. Skipping this step invalidates the bundle signature, which prevents macOS from displaying the app icon for anyone who clones the repo.
+
+If only the icon artwork changed (not `launch.sh`), you can rebuild just the icon and then sign:
+
+```bash
+make icon && make sign
+```
