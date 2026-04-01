@@ -31,13 +31,14 @@ No other dependencies are needed — Claude Code and the Basecamp CLI are instal
 1. **Download** this repo as a zip from GitHub and extract it.
 2. **Remove the quarantine flag** so macOS will run the app. Open Terminal, drag `claude-basecamp-cli.app` into the window after typing the command, and press Return:
    ```bash
-   xattr -d com.apple.quarantine 
+   xattr -rd com.apple.quarantine 
    ```
+   The `-r` flag is required — without it macOS removes quarantine from the app bundle but leaves it on the files inside, which blocks the launcher script from running.
 3. **Double-click** `claude-basecamp-cli.app`. The app will walk through the rest — installing Claude Code and the Basecamp CLI, signing in to both, and creating your workspace.
 
 After that first run the app opens normally every time.
 
-> **IT / MDM deployment:** run the `xattr` command above at enrollment time so users never see the Gatekeeper prompt.
+> **IT / MDM deployment:** run the `xattr -rd` command above at enrollment time so users never see the Gatekeeper prompt.
 
 ## The experience
 
